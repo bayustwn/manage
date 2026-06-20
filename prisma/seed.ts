@@ -1,4 +1,4 @@
-import { hashSync } from "bcryptjs";
+import { randomBytes, scrypt } from "node:crypto";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../generated/prisma/client.js";
 
@@ -8,8 +8,20 @@ const adapter = new PrismaPg({
 
 const prisma = new PrismaClient({ adapter });
 
+const SCRYPT_CONFIG = { N: 16384, r: 16, p: 1, dkLen: 64, maxmem: 128 * 16384 * 16 * 2 };
+
+async function hashPassword(password: string): Promise<string> {
+  const salt = randomBytes(16).toString("hex");
+  const key = await new Promise<Buffer>((resolve, reject) => {
+    scrypt(password.normalize("NFKC"), salt, SCRYPT_CONFIG.dkLen, SCRYPT_CONFIG, (err, key) =>
+      err ? reject(err) : resolve(key as Buffer),
+    );
+  });
+  return `${salt}:${key.toString("hex")}`;
+}
+
 async function main() {
-  const password = hashSync("password123", 10);
+  const password = await hashPassword("password123");
 
   async function seedUser(email: string, name: string, role: string) {
     const user = await prisma.user.upsert({
@@ -24,7 +36,7 @@ async function main() {
     });
 
     const existing = await prisma.account.findFirst({
-      where: { userId: user.id, providerId: "email" },
+      where: { userId: user.id, providerId: "credential" },
     });
 
     if (existing) {
@@ -36,8 +48,8 @@ async function main() {
       await prisma.account.create({
         data: {
           userId: user.id,
-          accountId: email,
-          providerId: "email",
+          accountId: user.id,
+          providerId: "credential",
           password,
         },
       });
@@ -49,8 +61,11 @@ async function main() {
   const admin = await seedUser("admin@projman.dev", "Admin", "SUPER_ADMIN");
   const user = await seedUser("user@projman.dev", "User", "USER");
 
-  const project = await prisma.project.create({
-    data: {
+  const project = await prisma.project.upsert({
+    where: { id: "seed-project" },
+    update: { name: "Manage Development" },
+    create: {
+      id: "seed-project",
       name: "Manage Development",
       description: "Main project for developing Manage app",
       ownerId: admin.id,
@@ -60,8 +75,11 @@ async function main() {
     },
   });
 
-  const backlog = await prisma.board.create({
-    data: {
+  const backlog = await prisma.board.upsert({
+    where: { id: "seed-backlog" },
+    update: { name: "Backlog" },
+    create: {
+      id: "seed-backlog",
       name: "Backlog",
       projectId: project.id,
       position: 0,
@@ -90,8 +108,11 @@ async function main() {
             : ["Design database schema"];
 
       for (let i = 0; i < titles.length; i++) {
-        await prisma.task.create({
-          data: {
+        await prisma.task.upsert({
+          where: { id: `seed-task-${list.id}-${i}` },
+          update: { title: titles[i] },
+          create: {
+            id: `seed-task-${list.id}-${i}`,
             title: titles[i],
             listId: list.id,
             position: i,
