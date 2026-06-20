@@ -48,6 +48,7 @@ export const auth = betterAuth({
         google: {
           clientId: GOOGLE_CLIENT_ID,
           clientSecret: GOOGLE_CLIENT_SECRET,
+          redirectURI: "http://localhost:5173/callback/google",
         },
       }
     : undefined,
