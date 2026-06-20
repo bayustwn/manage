@@ -138,7 +138,9 @@
             provider: "google",
             callbackURL: "/dashboard",
           });
-          if (data?.url) window.location.href = data.url;
+          if (data?.url) {
+            window.location.href = data.url;
+          }
           if (error) {
             addToast(error.message || "Google sign-in failed", "error");
           }

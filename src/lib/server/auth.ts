@@ -10,6 +10,12 @@ import {
   GOOGLE_CLIENT_SECRET,
 } from "$env/static/private";
 
+const googleRedirectURI = (() => {
+  if (!GOOGLE_CLIENT_ID) return undefined;
+  const base = BETTER_AUTH_URL.replace(/\/+$/, "");
+  return `${base}/callback/google`;
+})();
+
 export const auth = betterAuth({
   baseURL: BETTER_AUTH_URL,
   database: prismaAdapter(prisma, {
@@ -48,7 +54,7 @@ export const auth = betterAuth({
         google: {
           clientId: GOOGLE_CLIENT_ID,
           clientSecret: GOOGLE_CLIENT_SECRET,
-          redirectURI: "http://localhost:5173/callback/google",
+          redirectURI: googleRedirectURI,
         },
       }
     : undefined,
