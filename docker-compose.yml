@@ -2,6 +2,12 @@ services:
   db:
     image: postgres:17-alpine
     container_name: projman-db
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-projman}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?err}
@@ -15,18 +21,34 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - projman-net
 
   pgadmin:
     image: dpage/pgadmin4:9
     container_name: projman-pgadmin
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@projman.dev}
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:?err}
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
     ports:
-      - "5050:80"
+      - "127.0.0.1:5050:80"
     depends_on:
       db:
         condition: service_healthy
+    networks:
+      - projman-net
 
 volumes:
   pgdata:
+
+networks:
+  projman-net:
+    driver: bridge
