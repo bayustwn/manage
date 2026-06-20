@@ -4,7 +4,11 @@ import { sveltekitCookies } from "better-auth/svelte-kit";
 import { getRequestEvent } from "$app/server";
 import { prisma } from "$lib/server/db";
 import { sendEmail } from "$lib/server/email";
-import { BETTER_AUTH_URL } from "$env/static/private";
+import {
+  BETTER_AUTH_URL,
+  GOOGLE_CLIENT_ID,
+  GOOGLE_CLIENT_SECRET,
+} from "$env/static/private";
 
 export const auth = betterAuth({
   baseURL: BETTER_AUTH_URL,
@@ -39,6 +43,14 @@ export const auth = betterAuth({
       }
     },
   },
+  socialProviders: GOOGLE_CLIENT_ID
+    ? {
+        google: {
+          clientId: GOOGLE_CLIENT_ID,
+          clientSecret: GOOGLE_CLIENT_SECRET,
+        },
+      }
+    : undefined,
   trustedOrigins: [BETTER_AUTH_URL],
   plugins: [sveltekitCookies(getRequestEvent)],
 });
