@@ -8,15 +8,19 @@ import { validateEnv } from "$lib/server/env";
 validateEnv();
 
 export const handle: Handle = async ({ event, resolve }) => {
-  if (!building) {
-    const session = await auth.api.getSession({
-      headers: event.request.headers,
-    });
+  if (building) return resolve(event);
 
-    if (session) {
-      event.locals.session = session.session;
-      event.locals.user = session.user;
-    }
+  if (event.url.pathname.startsWith("/callback/")) {
+    return auth.handler(event.request);
+  }
+
+  const session = await auth.api.getSession({
+    headers: event.request.headers,
+  });
+
+  if (session) {
+    event.locals.session = session.session;
+    event.locals.user = session.user;
   }
 
   return svelteKitHandler({ event, resolve, auth, building });
