@@ -11,29 +11,43 @@ const prisma = new PrismaClient({ adapter });
 async function main() {
   const password = hashSync("password123", 10);
 
-  const admin = await prisma.user.upsert({
-    where: { email: "admin@projman.dev" },
-    update: { password },
-    create: {
-      email: "admin@projman.dev",
-      name: "Admin",
-      password,
-      role: "SUPER_ADMIN",
-      emailVerified: true,
-    },
-  });
+  async function seedUser(email: string, name: string, role: string) {
+    const user = await prisma.user.upsert({
+      where: { email },
+      update: { emailVerified: true },
+      create: {
+        email,
+        name,
+        role: role as any,
+        emailVerified: true,
+      },
+    });
 
-  const user = await prisma.user.upsert({
-    where: { email: "user@projman.dev" },
-    update: { password },
-    create: {
-      email: "user@projman.dev",
-      name: "User",
-      password,
-      role: "USER",
-      emailVerified: true,
-    },
-  });
+    const existing = await prisma.account.findFirst({
+      where: { userId: user.id, providerId: "email" },
+    });
+
+    if (existing) {
+      await prisma.account.update({
+        where: { id: existing.id },
+        data: { password },
+      });
+    } else {
+      await prisma.account.create({
+        data: {
+          userId: user.id,
+          accountId: email,
+          providerId: "email",
+          password,
+        },
+      });
+    }
+
+    return user;
+  }
+
+  const admin = await seedUser("admin@projman.dev", "Admin", "SUPER_ADMIN");
+  const user = await seedUser("user@projman.dev", "User", "USER");
 
   const project = await prisma.project.create({
     data: {
