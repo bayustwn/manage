@@ -1,4 +1,3 @@
-
 generator client {
   provider = "prisma-client"
   output   = "../generated/prisma"
@@ -6,7 +5,6 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 enum UserRole {
@@ -102,7 +100,7 @@ model Verification {
 
 model Project {
   id          String   @id @default(cuid())
-  name        String
+  name        String   @db.VarChar(100)
   description String?
   ownerId     String
   createdAt   DateTime @default(now())
@@ -113,6 +111,8 @@ model Project {
   boards      Board[]
   activities  ActivityLog[]
   invitations Invitation[]
+
+  @@index([ownerId])
 }
 
 model ProjectMember {
@@ -126,6 +126,7 @@ model ProjectMember {
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([projectId, userId])
+  @@index([userId])
 }
 
 model Board {
@@ -136,8 +137,10 @@ model Board {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  project Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   lists   BoardList[]
+
+  @@index([projectId])
 }
 
 model BoardList {
@@ -150,6 +153,8 @@ model BoardList {
 
   board Board  @relation(fields: [boardId], references: [id], onDelete: Cascade)
   tasks Task[]
+
+  @@index([boardId])
 }
 
 model Task {
@@ -170,6 +175,10 @@ model Task {
   reporter      User           @relation("TaskReporter", fields: [reporterId], references: [id])
   activities    ActivityLog[]
   notifications Notification[]
+
+  @@index([listId])
+  @@index([assigneeId])
+  @@index([reporterId])
 }
 
 model ActivityLog {
@@ -184,6 +193,9 @@ model ActivityLog {
   task    Task?   @relation(fields: [taskId], references: [id])
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   user    User    @relation(fields: [userId], references: [id])
+
+  @@index([projectId])
+  @@index([userId])
 }
 
 model Notification {
@@ -197,6 +209,9 @@ model Notification {
 
   user User  @relation(fields: [userId], references: [id], onDelete: Cascade)
   task Task? @relation(fields: [taskId], references: [id])
+
+  @@index([userId])
+  @@index([taskId])
 }
 
 model Invitation {
