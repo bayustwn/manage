@@ -1,5 +1,6 @@
+import { randomUUID } from "node:crypto";
 import type { Handle, HandleServerError } from "@sveltejs/kit";
-import { building } from "$app/environment";
+import { building, dev } from "$app/environment";
 import { auth } from "$lib/server/auth";
 import { svelteKitHandler } from "better-auth/svelte-kit";
 import { validateEnv } from "$lib/server/env";
@@ -7,16 +8,27 @@ import { validateEnv } from "$lib/server/env";
 validateEnv();
 
 export const handle: Handle = async ({ event, resolve }) => {
+  if (!building) {
+    const session = await auth.api.getSession({
+      headers: event.request.headers,
+    });
+
+    if (session) {
+      event.locals.session = session.session;
+      event.locals.user = session.user;
+    }
+  }
+
   return svelteKitHandler({ event, resolve, auth, building });
 };
 
 export const handleError: HandleServerError = ({ error, event }) => {
-  const id = crypto.randomUUID();
+  const id = randomUUID();
 
-  console.error(JSON.stringify({ id, url: event.url.pathname, error }));
+  console.error({ id, url: event.url.pathname, error });
 
   return {
     message: "Internal server error",
-    ...(process.env.NODE_ENV === "development" && { id }),
+    ...(dev && { id }),
   };
 };

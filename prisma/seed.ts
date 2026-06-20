@@ -1,3 +1,4 @@
+import { hashSync } from "bcryptjs";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../generated/prisma/client.js";
 
@@ -8,12 +9,15 @@ const adapter = new PrismaPg({
 const prisma = new PrismaClient({ adapter });
 
 async function main() {
+  const password = hashSync("password123", 10);
+
   const admin = await prisma.user.upsert({
     where: { email: "admin@projman.dev" },
     update: {},
     create: {
       email: "admin@projman.dev",
       name: "Admin",
+      password,
       role: "SUPER_ADMIN",
       emailVerified: true,
     },
@@ -25,6 +29,7 @@ async function main() {
     create: {
       email: "user@projman.dev",
       name: "User",
+      password,
       role: "USER",
       emailVerified: true,
     },
@@ -32,8 +37,8 @@ async function main() {
 
   const project = await prisma.project.create({
     data: {
-      name: "ProjMan Development",
-      description: "Main project for developing ProjMan app",
+      name: "Manage Development",
+      description: "Main project for developing Manage app",
       ownerId: admin.id,
       members: {
         create: { userId: user.id, role: "MEMBER" },

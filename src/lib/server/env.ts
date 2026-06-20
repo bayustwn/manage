@@ -1,18 +1,33 @@
 import { building } from "$app/environment";
+import {
+  DATABASE_URL,
+  POSTGRES_PASSWORD,
+  BETTER_AUTH_SECRET,
+  BETTER_AUTH_URL,
+  RESEND_API_KEY,
+  EMAIL_FROM,
+  PGADMIN_PASSWORD,
+} from "$env/static/private";
 
-const required = [
-  "DATABASE_URL",
-  "POSTGRES_PASSWORD",
-  "BETTER_AUTH_SECRET",
-  "BETTER_AUTH_URL",
-] as const;
+const required: Record<string, string | undefined> = {
+  DATABASE_URL,
+  POSTGRES_PASSWORD,
+  BETTER_AUTH_SECRET,
+  BETTER_AUTH_URL,
+};
 
-const optional = ["RESEND_API_KEY", "EMAIL_FROM", "PGADMIN_PASSWORD"] as const;
+const optional: Record<string, string | undefined> = {
+  RESEND_API_KEY,
+  EMAIL_FROM,
+  PGADMIN_PASSWORD,
+};
 
 export function validateEnv() {
   if (building) return;
 
-  const missing = required.filter((key) => !process.env[key]);
+  const missing = Object.entries(required)
+    .filter(([_, v]) => !v)
+    .map(([k]) => k);
 
   if (missing.length > 0) {
     throw new Error(
@@ -20,10 +35,7 @@ export function validateEnv() {
     );
   }
 
-  if (
-    process.env.BETTER_AUTH_SECRET &&
-    process.env.BETTER_AUTH_SECRET.length < 32
-  ) {
+  if (BETTER_AUTH_SECRET && BETTER_AUTH_SECRET.length < 32) {
     throw new Error(
       "BETTER_AUTH_SECRET must be at least 32 characters long",
     );
