@@ -1,9 +1,21 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "$generated/prisma/client";
-import { DATABASE_URL } from "$env/static/private";
+import { serverConfig } from "$lib/server/config";
 
-const adapter = new PrismaPg({
-  connectionString: DATABASE_URL,
-});
+const globalForPrisma = globalThis as typeof globalThis & {
+  prisma?: PrismaClient;
+};
 
-export const prisma = new PrismaClient({ adapter });
+function createPrismaClient() {
+  const adapter = new PrismaPg({
+    connectionString: serverConfig.DATABASE_URL,
+  });
+
+  return new PrismaClient({ adapter });
+}
+
+export const prisma = globalForPrisma.prisma ?? createPrismaClient();
+
+if (process.env.NODE_ENV !== "production") {
+  globalForPrisma.prisma = prisma;
+}

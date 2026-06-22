@@ -16,7 +16,7 @@
     X,
   } from "@lucide/svelte";
 
-  let items: Toast[] = $state(toasts.get());
+  let items = $state<readonly Toast[]>(toasts.get());
 
   $effect(() => {
     return toasts.subscribe((v) => {
@@ -43,9 +43,7 @@
 
 {#if items.length > 0}
   <div
-    class="fixed right-4 top-4 z-50 flex flex-col gap-2"
-    role="status"
-    aria-live="polite"
+    class="fixed top-4 right-4 left-4 z-50 flex flex-col gap-2 sm:left-auto sm:max-w-sm"
     aria-relevant="additions removals"
   >
     {#each items as item (item.id)}
@@ -56,7 +54,7 @@
         role={isAlert ? "alert" : "status"}
         aria-live={isAlert ? "assertive" : "polite"}
         aria-atomic="true"
-        class="{variantStyles[item.variant]} flex items-center gap-2 rounded-xl px-4 py-2 text-sm shadow-lg"
+        class="{variantStyles[item.variant]} flex w-full items-center gap-2 rounded-xl px-4 py-2 text-sm shadow-lg"
         onmouseenter={() => pauseToast(item.id)}
         onmouseleave={() => resumeToast(item.id)}
       >

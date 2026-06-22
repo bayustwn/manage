@@ -8,7 +8,7 @@
   import { FolderKanban } from "@lucide/svelte";
 </script>
 
-<div class="mx-auto max-w-4xl px-4 py-8">
+<div>
   <h1 class="text-foreground mb-6 text-2xl font-semibold">Dashboard</h1>
 
   <Card>

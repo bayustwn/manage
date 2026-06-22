@@ -27,8 +27,8 @@ enum Priority {
 
 model User {
   id            String   @id @default(cuid())
-  name          String
-  email         String   @unique
+  name          String   @db.VarChar(100)
+  email         String   @unique @db.VarChar(254)
   emailVerified Boolean  @default(false)
   image         String?
   password      String?
@@ -62,6 +62,7 @@ model Session {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+  @@index([expiresAt])
   @@map("session")
 }
 
@@ -82,6 +83,7 @@ model Account {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@unique([providerId, accountId])
   @@index([userId])
   @@map("account")
 }
@@ -95,6 +97,7 @@ model Verification {
   updatedAt  DateTime @updatedAt
 
   @@index([identifier])
+  @@index([expiresAt])
   @@map("verification")
 }
 
@@ -195,6 +198,7 @@ model ActivityLog {
   user    User    @relation(fields: [userId], references: [id])
 
   @@index([projectId])
+  @@index([taskId])
   @@index([userId])
 }
 
@@ -225,4 +229,9 @@ model Invitation {
   createdAt DateTime    @default(now())
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([email])
+  @@index([expiresAt])
+  @@index([projectId, accepted])
 }

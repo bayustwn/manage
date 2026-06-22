@@ -6,7 +6,8 @@ export type Toast = {
   id: string;
   message: string;
   variant: ToastVariant;
-  createdAt: number;
+  remaining: number;
+  startedAt: number;
 };
 
 export const toasts = atom<Toast[]>([]);
@@ -19,7 +20,7 @@ const DURATION = 4000;
 
 export function addToast(message: string, variant: ToastVariant = "default"): string {
   const id = `toast-${++counter}`;
-  const toast: Toast = { id, message, variant, createdAt: Date.now() };
+  const toast: Toast = { id, message, variant, remaining: DURATION, startedAt: Date.now() };
 
   const current = toasts.get();
   const next = [...current, toast];
@@ -37,8 +38,13 @@ export function addToast(message: string, variant: ToastVariant = "default"): st
 
 function scheduleDismiss(id: string) {
   clearTimer(id);
-  const timer = setTimeout(() => removeToast(id), DURATION);
+  const toast = toasts.get().find((t) => t.id === id);
+  const delay = toast?.remaining ?? DURATION;
+
+  const timer = setTimeout(() => removeToast(id), delay);
   timers.set(id, timer);
+
+  toasts.set(toasts.get().map((t) => (t.id === id ? { ...t, startedAt: Date.now() } : t)));
 }
 
 function clearTimer(id: string) {
@@ -50,18 +56,25 @@ function clearTimer(id: string) {
 }
 
 export function pauseToast(id: string) {
+  const toast = toasts.get().find((t) => t.id === id);
+  if (!toast) return;
+
+  const elapsed = Date.now() - toast.startedAt;
+  const remaining = Math.max(toast.remaining - elapsed, 0);
+
   clearTimer(id);
+  toasts.set(toasts.get().map((t) => (t.id === id ? { ...t, remaining } : t)));
 }
 
 export function resumeToast(id: string) {
   const toast = toasts.get().find((t) => t.id === id);
   if (!toast) return;
+  if (toast.remaining <= 0) {
+    removeToast(id);
+    return;
+  }
 
-  const elapsed = Date.now() - toast.createdAt;
-  const remaining = Math.max(DURATION - elapsed, 0);
-
-  const timer = setTimeout(() => removeToast(id), remaining);
-  timers.set(id, timer);
+  scheduleDismiss(id);
 }
 
 export function removeToast(id: string) {

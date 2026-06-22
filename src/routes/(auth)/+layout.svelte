@@ -8,7 +8,7 @@
   let { children } = $props();
 
   const currentTheme = useStore(theme);
-  const isDark = $derived(currentTheme === "dark");
+  const isDark = $derived(currentTheme.current === "dark");
 
   let session: App.SessionUser | null | undefined = $state();
   let isPending = $state(true);
@@ -22,7 +22,7 @@
 
   $effect(() => {
     if (!isPending && session) {
-      goto("/dashboard");
+      goto("/dashboard", { replaceState: true });
     }
   });
 

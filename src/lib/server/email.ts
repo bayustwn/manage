@@ -1,7 +1,11 @@
 import { Resend } from "resend";
-import { RESEND_API_KEY, EMAIL_FROM } from "$env/static/private";
+import { serverConfig } from "$lib/server/config";
 
-const resend = new Resend(RESEND_API_KEY);
+const resend = serverConfig.RESEND_API_KEY
+  ? new Resend(serverConfig.RESEND_API_KEY)
+  : null;
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export async function sendEmail({
   to,
@@ -12,16 +16,26 @@ export async function sendEmail({
   subject: string;
   text: string;
 }) {
-  if (!RESEND_API_KEY) return;
+  if (!EMAIL_RE.test(to)) {
+    throw new Error(`Invalid email address: ${to}`);
+  }
 
-  try {
-    await resend.emails.send({
-      from: EMAIL_FROM,
-      to,
-      subject,
-      text,
-    });
-  } catch (err) {
-    console.error("Failed to send email:", err);
+  if (!resend) {
+    throw new Error("RESEND_API_KEY is not configured");
+  }
+
+  if (!serverConfig.EMAIL_FROM) {
+    throw new Error("EMAIL_FROM is not configured");
+  }
+
+  const { error } = await resend.emails.send({
+    from: serverConfig.EMAIL_FROM,
+    to,
+    subject,
+    text,
+  });
+
+  if (error) {
+    throw new Error(`Failed to send email: ${error.message}`);
   }
 }

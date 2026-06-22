@@ -1,6 +1,30 @@
 import { randomBytes, scrypt } from "node:crypto";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient } from "../generated/prisma/client.js";
+import { PrismaClient, UserRole } from "../generated/prisma/client.js";
+
+function isLocalDatabaseUrl(url: string): boolean {
+  try {
+    const { hostname } = new URL(url);
+    return hostname === "localhost" || hostname === "127.0.0.1";
+  } catch {
+    return false;
+  }
+}
+
+if (process.env.NODE_ENV === "production") {
+  throw new Error("Refusing to seed production database");
+}
+
+if (!isLocalDatabaseUrl(process.env.DATABASE_URL || "")) {
+  throw new Error("Seed can only run against a local database (localhost or 127.0.0.1)");
+}
+
+const seedAdminPassword = process.env.SEED_ADMIN_PASSWORD;
+const seedUserPassword = process.env.SEED_USER_PASSWORD ?? seedAdminPassword;
+
+if (!seedAdminPassword || seedAdminPassword.length < 12) {
+  throw new Error("SEED_ADMIN_PASSWORD must be at least 12 characters");
+}
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL!,
@@ -21,16 +45,16 @@ async function hashPassword(password: string): Promise<string> {
 }
 
 async function main() {
-  const password = await hashPassword("password123");
+  async function seedUser(email: string, name: string, role: UserRole, plainPassword: string) {
+    const password = await hashPassword(plainPassword);
 
-  async function seedUser(email: string, name: string, role: string) {
     const user = await prisma.user.upsert({
       where: { email },
       update: { emailVerified: true },
       create: {
         email,
         name,
-        role: role as any,
+        role,
         emailVerified: true,
       },
     });
@@ -58,8 +82,8 @@ async function main() {
     return user;
   }
 
-  const admin = await seedUser("admin@projman.dev", "Admin", "SUPER_ADMIN");
-  const user = await seedUser("user@projman.dev", "User", "USER");
+  const admin = await seedUser("admin@projman.dev", "Admin", UserRole.SUPER_ADMIN, seedAdminPassword);
+  const user = await seedUser("user@projman.dev", "User", UserRole.USER, seedUserPassword!);
 
   const project = await prisma.project.upsert({
     where: { id: "seed-project" },
@@ -69,10 +93,19 @@ async function main() {
       name: "Manage Development",
       description: "Main project for developing Manage app",
       ownerId: admin.id,
-      members: {
-        create: { userId: user.id, role: "MEMBER" },
-      },
     },
+  });
+
+  await prisma.projectMember.upsert({
+    where: { projectId_userId: { projectId: project.id, userId: admin.id } },
+    update: { role: "OWNER" },
+    create: { projectId: project.id, userId: admin.id, role: "OWNER" },
+  });
+
+  await prisma.projectMember.upsert({
+    where: { projectId_userId: { projectId: project.id, userId: user.id } },
+    update: { role: "MEMBER" },
+    create: { projectId: project.id, userId: user.id, role: "MEMBER" },
   });
 
   const backlog = await prisma.board.upsert({

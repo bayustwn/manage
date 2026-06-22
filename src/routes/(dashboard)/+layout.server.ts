@@ -6,5 +6,13 @@ export const load: LayoutServerLoad = async ({ locals }) => {
     redirect(302, "/login");
   }
 
-  return {};
+  return {
+    user: {
+      id: locals.user!.id,
+      email: locals.user!.email,
+      name: locals.user!.name,
+      image: locals.user!.image,
+      emailVerified: locals.user!.emailVerified,
+    },
+  };
 };

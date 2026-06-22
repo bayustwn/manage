@@ -10,17 +10,16 @@ validateEnv();
 export const handle: Handle = async ({ event, resolve }) => {
   if (building) return resolve(event);
 
-  if (event.url.pathname.startsWith("/callback/")) {
-    return auth.handler(event.request);
-  }
-
-  const session = await auth.api.getSession({
-    headers: event.request.headers,
-  });
-
-  if (session) {
-    event.locals.session = session.session;
-    event.locals.user = session.user;
+  // Populate locals with session for SSR — avoids redundant getSession di layouts
+  const url = new URL(event.request.url);
+  if (!url.pathname.startsWith("/api/")) {
+    const s = await auth.api.getSession({
+      headers: event.request.headers,
+    });
+    if (s?.session) {
+      event.locals.session = s.session;
+      event.locals.user = s.user;
+    }
   }
 
   return svelteKitHandler({ event, resolve, auth, building });

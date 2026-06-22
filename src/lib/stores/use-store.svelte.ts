@@ -1,6 +1,6 @@
 import type { ReadableAtom } from "nanostores";
 
-export function useStore<T>(atom: ReadableAtom<T>): T {
+export function useStore<T>(atom: ReadableAtom<T>): { readonly current: T } {
   let value = $state<T>(atom.get());
 
   $effect(() => {
@@ -9,5 +9,9 @@ export function useStore<T>(atom: ReadableAtom<T>): T {
     });
   });
 
-  return value;
+  return {
+    get current() {
+      return value;
+    },
+  };
 }
