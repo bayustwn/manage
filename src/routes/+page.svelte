@@ -65,7 +65,8 @@
   }
 </script>
 
-<nav class="bg-background/80 sticky top-0 z-50 backdrop-blur-sm">
+<div class="flex min-h-screen flex-col">
+  <nav class="bg-background/80 sticky top-0 z-50 backdrop-blur-sm">
   <div class="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
     <div class="flex items-center gap-2">
       <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 32 32" fill="none" class="shrink-0">
@@ -107,7 +108,7 @@
   </div>
 </nav>
 
-<section class="mx-auto max-w-4xl px-4 py-20 text-center sm:py-28">
+  <section class="mx-auto flex w-full max-w-4xl flex-1 flex-col justify-center px-4 py-12 text-center sm:py-16">
   <h1 class="text-foreground mb-4 text-4xl font-bold tracking-tight sm:text-5xl">
     Organize your projects<br />
     <span class="text-primary">with ease</span>
@@ -132,6 +133,7 @@
 <footer class="border-border border-t py-8 text-center">
   <p class="text-muted-foreground text-xs">&copy; 2026 Manage. All rights reserved.</p>
 </footer>
+</div>
 
 <Dialog bind:open={showSignOutDialog}>
   <DialogContent>

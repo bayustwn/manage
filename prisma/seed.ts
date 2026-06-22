@@ -2,10 +2,19 @@ import { randomBytes, scrypt } from "node:crypto";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient, UserRole } from "../generated/prisma/client.js";
 
+// --- Guard: only run against localhost ---
 function isLocalDatabaseUrl(url: string): boolean {
   try {
     const { hostname } = new URL(url);
-    return hostname === "localhost" || hostname === "127.0.0.1";
+    return (
+      hostname === "localhost" ||
+      hostname === "127.0.0.1" ||
+      hostname === "::1" ||
+      hostname.startsWith("10.") ||
+      hostname.startsWith("172.") ||
+      hostname.startsWith("192.168.") ||
+      hostname.startsWith("100.")
+    );
   } catch {
     return false;
   }
@@ -26,12 +35,11 @@ if (!seedAdminPassword || seedAdminPassword.length < 12) {
   throw new Error("SEED_ADMIN_PASSWORD must be at least 12 characters");
 }
 
-const adapter = new PrismaPg({
-  connectionString: process.env.DATABASE_URL!,
-});
-
+// --- Prisma setup ---
+const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
 const prisma = new PrismaClient({ adapter });
 
+// --- Scrypt config (must match better-auth) ---
 const SCRYPT_CONFIG = { N: 16384, r: 16, p: 1, dkLen: 64, maxmem: 128 * 16384 * 16 * 2 };
 
 async function hashPassword(password: string): Promise<string> {
@@ -44,47 +52,80 @@ async function hashPassword(password: string): Promise<string> {
   return `${salt}:${key.toString("hex")}`;
 }
 
-async function main() {
-  async function seedUser(email: string, name: string, role: UserRole, plainPassword: string) {
-    const password = await hashPassword(plainPassword);
+async function upsertUser(email: string, name: string, plainPassword: string) {
+  const password = await hashPassword(plainPassword);
 
-    const user = await prisma.user.upsert({
-      where: { email },
-      update: { emailVerified: true },
-      create: {
-        email,
-        name,
-        role,
-        emailVerified: true,
-      },
+  const user = await prisma.user.upsert({
+    where: { email },
+    update: { emailVerified: true },
+    create: { email, name, role: UserRole.USER, emailVerified: true },
+  });
+
+  const existing = await prisma.account.findFirst({
+    where: { userId: user.id, providerId: "credential" },
+  });
+
+  if (existing) {
+    await prisma.account.update({ where: { id: existing.id }, data: { password } });
+  } else {
+    await prisma.account.create({
+      data: { userId: user.id, accountId: user.id, providerId: "credential", password },
     });
-
-    const existing = await prisma.account.findFirst({
-      where: { userId: user.id, providerId: "credential" },
-    });
-
-    if (existing) {
-      await prisma.account.update({
-        where: { id: existing.id },
-        data: { password },
-      });
-    } else {
-      await prisma.account.create({
-        data: {
-          userId: user.id,
-          accountId: user.id,
-          providerId: "credential",
-          password,
-        },
-      });
-    }
-
-    return user;
   }
 
-  const admin = await seedUser("admin@projman.dev", "Admin", UserRole.SUPER_ADMIN, seedAdminPassword);
-  const user = await seedUser("user@projman.dev", "User", UserRole.USER, seedUserPassword!);
+  return user;
+}
 
+async function upsertProjectMember(projectId: string, userId: string, role: "OWNER" | "MEMBER" | "VIEWER") {
+  await prisma.projectMember.upsert({
+    where: { projectId_userId: { projectId, userId } },
+    update: { role },
+    create: { projectId, userId, role },
+  });
+}
+
+async function upsertBoard(projectId: string, name: string, position: number, lists: string[]) {
+  await prisma.board.upsert({
+    where: { id: `seed-board-${name.toLowerCase().replace(/\s+/g, "-")}` },
+    update: { name },
+    create: {
+      id: `seed-board-${name.toLowerCase().replace(/\s+/g, "-")}`,
+      name,
+      projectId,
+      position,
+      lists: {
+        create: lists.map((listName, i) => ({ name: listName, position: i })),
+      },
+    },
+  });
+}
+
+async function upsertTask(listId: string, index: number, title: string, reporterId: string, assigneeId?: string) {
+  await prisma.task.upsert({
+    where: { id: `seed-task-${listId}-${index}` },
+    update: { title },
+    create: {
+      id: `seed-task-${listId}-${index}`,
+      title,
+      listId,
+      position: index,
+      reporterId,
+      ...(assigneeId ? { assigneeId } : {}),
+    },
+  });
+}
+
+// ===== Main =====
+async function main() {
+  // Cleanup old "email" accounts from previous seed (better-auth uses "credential")
+  await prisma.account.deleteMany({ where: { providerId: "email" } });
+
+  // ── Users ─────────────────────────────────────────────────
+  const admin = await upsertUser("admin@projman.dev", "Admin", seedAdminPassword);
+  const user = await upsertUser("user@projman.dev", "User", seedUserPassword!);
+  const viewer = await upsertUser("viewer@projman.dev", "Viewer", seedUserPassword!);
+
+  // ── Projects ───────────────────────────────────────────────
   const project = await prisma.project.upsert({
     where: { id: "seed-project" },
     update: { name: "Manage Development" },
@@ -96,36 +137,30 @@ async function main() {
     },
   });
 
-  await prisma.projectMember.upsert({
-    where: { projectId_userId: { projectId: project.id, userId: admin.id } },
-    update: { role: "OWNER" },
-    create: { projectId: project.id, userId: admin.id, role: "OWNER" },
-  });
+  // Project members
+  await upsertProjectMember(project.id, admin.id, "OWNER");
+  await upsertProjectMember(project.id, user.id, "MEMBER");
+  await upsertProjectMember(project.id, viewer.id, "VIEWER");
 
-  await prisma.projectMember.upsert({
-    where: { projectId_userId: { projectId: project.id, userId: user.id } },
-    update: { role: "MEMBER" },
-    create: { projectId: project.id, userId: user.id, role: "MEMBER" },
-  });
-
-  const backlog = await prisma.board.upsert({
-    where: { id: "seed-backlog" },
-    update: { name: "Backlog" },
+  // Second project owned by User
+  const project2 = await prisma.project.upsert({
+    where: { id: "seed-project-2" },
+    update: { name: "Marketing Site" },
     create: {
-      id: "seed-backlog",
-      name: "Backlog",
-      projectId: project.id,
-      position: 0,
-      lists: {
-        create: [
-          { name: "To Do", position: 0 },
-          { name: "In Progress", position: 1 },
-          { name: "Done", position: 2 },
-        ],
-      },
+      id: "seed-project-2",
+      name: "Marketing Site",
+      description: "Company landing page redesign",
+      ownerId: user.id,
     },
   });
 
+  await upsertProjectMember(project2.id, user.id, "OWNER");
+  await upsertProjectMember(project2.id, admin.id, "MEMBER");
+
+  // ── Boards & Lists ─────────────────────────────────────────
+  await upsertBoard(project.id, "Backlog", 0, ["To Do", "In Progress", "Done"]);
+
+  // ── Tasks ──────────────────────────────────────────────────
   const boards = await prisma.board.findMany({
     where: { projectId: project.id },
     include: { lists: { orderBy: { position: "asc" } } },
@@ -133,26 +168,16 @@ async function main() {
 
   for (const board of boards) {
     for (const list of board.lists) {
-      const titles =
-        list.name === "To Do"
-          ? ["Setup CI/CD", "Write documentation", "Add unit tests"]
-          : list.name === "In Progress"
-            ? ["Implement auth flow"]
-            : ["Design database schema"];
+      const titles: Record<string, string[]> = {
+        "To Do": ["Setup CI/CD pipeline", "Write onboarding docs", "Add unit tests for auth"],
+        "In Progress": ["Implement task drag & drop", "Design system audit"],
+        Done: ["Database schema design", "Auth flow implementation"],
+      };
 
-      for (let i = 0; i < titles.length; i++) {
-        await prisma.task.upsert({
-          where: { id: `seed-task-${list.id}-${i}` },
-          update: { title: titles[i] },
-          create: {
-            id: `seed-task-${list.id}-${i}`,
-            title: titles[i],
-            listId: list.id,
-            position: i,
-            reporterId: admin.id,
-            assigneeId: i === 0 ? user.id : undefined,
-          },
-        });
+      const items = titles[list.name] ?? [];
+
+      for (let i = 0; i < items.length; i++) {
+        await upsertTask(list.id, i, items[i], admin.id, i === 0 ? user.id : undefined);
       }
     }
   }
